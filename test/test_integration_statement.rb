@@ -192,6 +192,20 @@ class IntegrationStatementTestCase < SQLite3::TestCase
     assert called
   end
 
+  def test_reused_statement_gets_a_fresh_timeout_budget
+    @db.statement_timeout = 100
+    @db.prepare(<<~SQL) do |stmt|
+      WITH RECURSIVE r(i) AS (VALUES(0) UNION ALL SELECT i+1 FROM r LIMIT 10000)
+      SELECT count(i) FROM r;
+    SQL
+      assert_equal [[10000]], stmt.execute!.to_a
+      sleep 0.15
+      assert_equal [[10000]], stmt.execute!.to_a
+    end
+  ensure
+    @db.statement_timeout = 0
+  end
+
   def test_long_running_statements_get_interrupted_when_statement_timeout_set
     @db.statement_timeout = 100
     started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
